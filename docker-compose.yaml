@@ -1,0 +1,66 @@
+services:
+  caddy:
+    restart: unless-stopped
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    networks:
+      - frontend
+    depends_on:
+      - web
+      - backend
+
+  backend:
+    restart: unless-stopped
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      PORT: "43554"
+      DATABASE_URL: postgresql://studyapp:${DB_PASSWORD}@db:5432/studyapp
+    networks:
+      - backend
+      - frontend
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      PORT: "3000"
+      API_URL: "/api"
+    networks:
+      - frontend
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studyapp
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: studyapp
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studyapp -d studyapp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+
+volumes:
+  db_data:
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
